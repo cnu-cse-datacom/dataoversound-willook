@@ -13,6 +13,9 @@ import java.util.LinkedList;
 import java.util.Queue;
 
 import android.widget.Toast;
+
+import calsualcoding.reedsolomon.EncoderDecoder;
+import google.zxing.common.reedsolomon.ReedSolomonException;
 public class Listentone {
 
     int HANDSHAKE_START_HZ = 4096;
@@ -31,12 +34,33 @@ public class Listentone {
     private float interval = 0.1f;
 
     private int mBufferSize = AudioRecord.getMinBufferSize(mSampleRate, mChannelCount, mAudioFormat);
-
+    private EncoderDecoder encoderDecoder;
     public AudioRecord mAudioRecord = null;
     int audioEncodig;
     boolean startFlag;
     FastFourierTransformer transform;
-    public void PreRequest(){
+    private void pprint(String s){
+        Log.d("ListentoneCHUNK", s);
+    }
+    private void pprint(int i){
+        Log.d("ListentoneCHUNK", Integer.toString(i));
+    }
+    private void pprint(String s, int i){
+        Log.d("ListentoneCHUNK", (s+" "+Integer.toString(i)));
+    }
+    private void pprint(String s, short i){ Log.d("ListentoneCHUNK", (s+" "+Integer.toString((int)i))); }
+    private void pprint(String s, double d){ Log.d("ListentoneCHUNK", (s+" "+Double.toString(d))); }
+
+    public Listentone(){
+        //Log.d("Listentone", "hello world!");
+        transform = new FastFourierTransformer(DftNormalization.STANDARD);
+        startFlag = false;
+        mAudioRecord = new AudioRecord(mAudioSource, mSampleRate, mChannelCount, mAudioFormat, mBufferSize);
+        mAudioRecord.startRecording();
+        encoderDecoder = new EncoderDecoder();
+    }
+
+    public void PreRequest()  {
         Queue<Double> packet = new LinkedList<Double>();
         short[] buffer;
         while(true){
@@ -57,6 +81,15 @@ public class Listentone {
                 pprint("packet len: ",packet.size());
                 byte[] byteStream = extractPacket(packet);
                 pprint("bytes len: ",byteStream.length);
+
+                try{
+                    try{
+                        byteStream = encoderDecoder.decodeData(byteStream, 4);
+                    } catch(ReedSolomonException e1){ }
+                } catch(EncoderDecoder.DataTooLargeException e2){ }
+
+
+
                 String s = byteArrayToString(byteStream);
                 pprint(s);
                 startFlag = false;
@@ -70,46 +103,14 @@ public class Listentone {
         }
 
     }
-    private void pprint(String s){
-        Log.d("ListentoneCHUNK", s);
-    }
-    private void pprint(int i){
-        Log.d("ListentoneCHUNK", Integer.toString(i));
-    }
-    private void pprint(String s, int i){
-        Log.d("ListentoneCHUNK", (s+" "+Integer.toString(i)));
-    }
-    private void pprint(String s, short i){
-        Log.d("ListentoneCHUNK", (s+" "+Integer.toString((int)i)));
-    }
-    private void pprint(String s, double d){
-        Log.d("ListentoneCHUNK", (s+" "+Double.toString(d)));
-    }
+
     private String byteArrayToString(byte[] byteSteam){
-        StringBuffer sb = new StringBuffer();
-        int curBit = 8-BITS;
-        char ch = 0;
-        for(int i=0;i<byteSteam.length;i++){
-            //pprint("bytes: ",byteSteam[i]);
-            ch += byteSteam[i] << curBit;
-            curBit = curBit - BITS;
-            if(curBit == -1*BITS){
-                //pprint("ch: ",(int)ch);
-                curBit = 8-BITS;
-                sb.append(ch);
-                ch = 0;
-            }
-        }
+         StringBuffer sb = new StringBuffer();
+        for(int i=0;i<byteSteam.length;i++)
+            sb.append((char)byteSteam[i]);
         return sb.toString();
     }
 
-    public Listentone(){
-        //Log.d("Listentone", "hello world!");
-        transform = new FastFourierTransformer(DftNormalization.STANDARD);
-        startFlag = false;
-        mAudioRecord = new AudioRecord(mAudioSource, mSampleRate, mChannelCount, mAudioFormat, mBufferSize);
-        mAudioRecord.startRecording();
-    }
     private byte[] extractPacket(Queue<Double> packet){
         int len = packet.size()/2+packet.size()%2;
         byte[] bytes = new byte[len];
@@ -117,11 +118,23 @@ public class Listentone {
         if(!packet.isEmpty()) packet.remove();
         if(!packet.isEmpty()) packet.remove();
         int top = 0;
+        int curBit =8-BITS;
+        byte bits = 0;
         while(!packet.isEmpty()){
             double cur = Math.round((packet.remove()-START_HZ)/STEP_HZ);
+            bits += ((int) cur) << curBit;
+            curBit -= BITS;
             if(cur >= 0 && cur < (1<<BITS)){
-                bytes[top] = (byte)(cur);
-                top += 1;
+
+
+
+                if(curBit == -1*BITS){
+                    bytes[top] = bits;
+                    top += 1;
+                    curBit = 8-BITS;
+                    bits = 0;
+                }
+
             }
             if(!packet.isEmpty()) packet.remove();
         }
@@ -182,4 +195,7 @@ public class Listentone {
         }
         return freqList;
     }
+
+
+
 }
