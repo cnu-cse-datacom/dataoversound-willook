@@ -105,6 +105,7 @@ public class Listentone {
     }
 
     private String byteArrayToString(byte[] byteSteam){
+        if (byteSteam == null) return "";
          StringBuffer sb = new StringBuffer();
         for(int i=0;i<byteSteam.length;i++)
             sb.append((char)byteSteam[i]);
@@ -195,7 +196,4 @@ public class Listentone {
         }
         return freqList;
     }
-
-
-
 }
